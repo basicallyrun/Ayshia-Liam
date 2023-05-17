@@ -1,0 +1,259 @@
+services:
+   overseerr:
+    container_name: overseerr
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    hostname: ${DOCKERHOSTNAME}
+    image: cr.hotio.dev/hotio/overseerr
+    networks:
+     - web
+    logging:
+      driver: json-file
+      options:
+        max-file: ${DOCKERLOGGING_MAXFILE}
+        max-size: ${DOCKERLOGGING_MAXSIZE}
+    restart: unless-stopped
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKERCONFDIR}/overseerr:/config
+      - ${DOCKERSTORAGEDIR}:/storage
+    labels:
+      - traefik.enable=true # <== Enable traefik on itself to view dashboard and assign subdomain to$
+      - traefik.http.routers.overseerr.rule=Host(`request.basicallyrun.au`) # <== Setting the domain for the d$
+      - traefik.http.routers.overseerr.entrypoints=web # <== Enabling the api to be a service to acce$
+      - traefik.http.routers.overseerr.tls=false
+      - traefik.http.middlewares.redirectos.redirectscheme.scheme=https
+      - traefik.http.routers.overseerr.middlewares=redirect-web-to-websecure@internal
+      - traefik.http.services.overseerr.loadbalancer.server.port=5055
+plex:
+    container_name: plex
+    environment:
+      PGID: "1000"
+      PLEX_CLAIM: claim-C1BaQsfNZ5TaHqQgbbxr
+      PUID: "1000"
+      TZ: Australia/Brisbane
+      VERSION: docker
+    hostname: themachine
+    image: lscr.io/linuxserver/plex
+restart: unless-stopped
+    volumes:
+    - type: bind
+      source: /etc/localtime
+      target: /etc/localtime
+      read_only: true
+      bind:
+        create_host_path: true
+    - type: bind
+      source: /mnt/data/.config/appdata/plex
+      target: /config
+      bind:
+        create_host_path: true
+    - type: bind
+      source: /mnt/data/
+      target: /storage
+      bind:
+        create_host_path: true
+    devices:
+      - /dev/dri:/dev/dri
+    labels:
+      - traefik.enable=true # <== Enable traefik on itself to view dashboard and assign subdomain to$
+      - traefik.http.routers.plex.rule=Host(`plex.basicallyrun.au`) # <== Setting the domain for the d$
+      - traefik.http.routers.plex.entrypoints=web # <== Enabling the api to be a service to acce$
+    networks:
+      - web
+
+traefik:
+    command:
+      - --api.insecure=true # <== Enabling insecure api, NOT RECOMMENDED FOR PRODUCTION
+      - --api.dashboard=true # <== Enabling the dashboard to view services, middlewares, routers, etc.
+      - --api.debug=true # <== Enabling additional endpoints for debugging and profiling
+      - --log.level=DEBUG # <== Setting the level of the logs from traefik
+      - --providers.docker=true # <== Enabling docker as the provider for traefik
+      - --providers.docker.exposedbydefault=true # <== Don't expose every container to traefik
+      - --providers.docker.useBindPortIP=true
+      # - --providers.file.filename=/dynamic.yaml # <== Referring to a dynamic configuration file
+      - --providers.docker.network=web # <== Operate on the docker network named web
+      - --entrypoints.web.address=:80 # <== Defining an entrypoint for port :80 named web
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --entrypoints.web.http.redirections.entrypoint.permanent=true
+      #- --entrypoints.web-secured.address=:443 # <== Defining an entrypoint for https on port :443 (not really needed)
+      #- --certificatesresolvers.mytlschallenge.acme.tlschallenge=true # <== Enable TLS-ALPN-01 (not really needed)
+      #- --certificatesresolvers.mytlschallenge.acme.email=you@youremail # <== Set your email (not really needed)
+      #- --certificatesresolvers.mytlschallenge.acme.storage=/letsencrypt/acme.json # <== SSL stuff we don't need.
+    volumes:
+      #- ./letsencrypt:/letsencrypt # <== Volume for certs (TLS) (not really needed)
+      - /var/run/docker.sock:/var/run/docker.sock # <== Volume for docker admin
+    networks:
+      - web # <== Placing traefik on the network named web, to access containers on this network
+    labels:
+      - traefik.enable=true # <== Enable traefik on itself to view dashboard and assign subdomain to$
+      - traefik.http.routers.api.rule=Host(`proxy.basicallyrun.au`) # <== Setting the domain for the d$
+      - traefik.http.routers.api.service=api@internal # <== Enabling the api to be a service to acce$
+radarr:
+    labels:
+     - traefik.enable=true
+     - traefik.http.routers.radarr.rule=Host(`movies.basicallyrun.au`)
+     - traefik.http.routers.radarr.entrypoints=web,websecure
+    networks:
+     - web
+sonarr:
+    networks:
+     - web
+    labels:
+     - traefik.enable=true
+     - traefik.http.routers.sonarr.tls=false
+     - traefik.http.routers.sonarr.rule=Host(`tv.basicallyrun.au`)
+     - traefik.http.routers.sonarr.entrypoints=web
+     - traefik.http.middlewares.redirectos.redirectscheme.scheme=https
+     - traefik.http.routers.sonarr.middlewares=redirect-web-to-websecure@internal
+     - traefik.http.services.sonarr.loadbalancer.server.port=8989
+
+portainer:
+    networks:
+     - web
+    labels:
+     - traefik.enable=true
+     - traefik.http.routers.portainer.rule=Host(`portainer.basicallyrun.au`)
+     - traefik.http.routers.portainer.entrypoints=web,websecure
+heimdall:
+heimdall:
+    container_name: heimdall
+    environment:
+      PGID: "1000"
+      PUID: "1000"
+      TZ: Australia/Brisbane
+    hostname: themachine
+    image: lscr.io/linuxserver/heimdall
+    restart: unless-stopped
+    volumes:
+    - type: bind
+      source: /etc/localtime
+      target: /etc/localtime
+      read_only: true
+      bind:
+        create_host_path: true
+    - type: bind
+      source: /mnt/data/.config/appdata/heimdall
+      target: /config
+      bind:
+        create_host_path: true
+    - type: bind
+      source: /mnt/data/
+      target: /storage
+      bind:
+        create_host_path: true
+     networks:
+      - web
+     labels:
+      - traefik.enable=true
+      - traefik.http.routers.heimdall.rule=Host(`dashboard.basicallyrun.au`)
+      - traefik.http.routers.heimdall.entrypoints=web
+      - traefik.http.middlewares.redirectos.redirectscheme.scheme=https
+      - traefik.http.routers.heimdall.middlewares=redirect-web-to-websecure@internal
+      - traefik.http.services.heimdall.loadbalancer.server.port=8002
+
+qbittorrent:
+container_name: qbittorrent
+    environment:
+      PGID: "1000"
+      PUID: "1000"
+      TZ: Australia/Brisbane
+      WEBUI_PORT: "8082"
+    hostname: themachine
+    image: lscr.io/linuxserver/qbittorrent
+    restart: unless-stopped
+    volumes:
+    - type: bind
+      source: /etc/localtime
+      target: /etc/localtime
+      read_only: true
+      bind:
+        create_host_path: true
+    - type: bind
+      source: /mnt/data/.config/appdata/qbittorrent
+      target: /config
+      bind:
+        create_host_path: true 
+    - type: bind
+      source: /mnt/data/
+      target: /storage
+      bind:
+        create_host_path: true
+    networks:
+      - web
+     labels:
+      - traefik.enable=true
+      - traefik.http.routers.qbittorrent.rule=Host(`torrent.basicallyrun.au`)
+      - traefik.http.routers.qbittorrent.entrypoints=web,websecure
+
+prowlarr:
+    container_name: prowlarr
+    environment:
+      PGID: "1000"
+      PUID: "1000"
+      TZ: Australia/Brisbane
+    hostname: themachine
+    image: lscr.io/linuxserver/prowlarr:develop
+    volumes:
+    - type: bind
+      source: /etc/localtime
+      target: /etc/localtime
+      read_only: true
+      bind:
+        create_host_path: true
+    - type: bind
+      source: /mnt/data/.config/appdata/prowlarr
+      target: /config
+      bind:
+        create_host_path: true
+    - type: bind
+      source: /mnt/data/
+      target: /storage
+      bind:
+        create_host_path: true
+    networks:
+      - web
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.prowlarr.rule=Host(`indexer.basicallyrun.au`)
+      - traefik.http.routers.prowlarr.entrypoints=web,websecure
+
+homeassistant:
+homeassistant:
+    container_name: homeassistant
+    environment:
+      TZ: Australia/Brisbane
+    hostname: themachine
+    image: homeassistant/home-assistant
+    restart: unless-stopped
+    volumes:
+    - type: bind
+      source: /etc/localtime
+      target: /etc/localtime
+      read_only: true
+      bind:
+        create_host_path: true
+    - type: bind
+      source: /mnt/data/.config/appdata/homeassistant
+      target: /config
+      bind:
+        create_host_path: true
+    - type: bind
+      source: /mnt/data/
+      target: /storage
+      bind:
+        create_host_path: true
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.homeassistant.rule=Host(`home.basicallyrun.au`)
+      - traefik.http.routers.homeassistant.entrypoints=web,websecure
+    networks:
+            - web
+
+networks:
+  web:
+    external: true
